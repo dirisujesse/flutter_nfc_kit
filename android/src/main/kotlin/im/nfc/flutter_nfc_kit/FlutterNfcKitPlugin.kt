@@ -22,6 +22,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.lang.Exception
 import java.lang.reflect.InvocationTargetException
 import java.util.*
 import kotlin.concurrent.schedule
@@ -270,11 +271,21 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
 
     override fun onDetachedFromActivity() {
-        pollingTimeoutTask?.cancel()
-        pollingTimeoutTask = null
-        tagTechnology = null
-        ndefTechnology = null
-        activity = null
+        try {
+            print("DETACHING")
+            val isDetached = activity == null
+            val isDestroyed = activity?.isDestroyed ?: true
+
+            if (!isDetached && !isDestroyed) {
+                pollingTimeoutTask?.cancel()
+                pollingTimeoutTask = null
+                tagTechnology = null
+                ndefTechnology = null
+                activity = null
+            }
+        } catch (ex: Exception) {
+            Log.e("flutter_nfc_red", "Failed destruct", ex)
+        }
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {}
