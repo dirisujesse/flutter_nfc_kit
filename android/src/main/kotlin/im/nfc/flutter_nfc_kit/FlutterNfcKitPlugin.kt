@@ -272,7 +272,7 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     override fun onDetachedFromActivity() {
         try {
-            print("DETACHING")
+            Log.i("flutter_nfc_reader", "DETACHING")
             val isDetached = activity == null
             val isDestroyed = activity?.isDestroyed ?: true
 
@@ -284,7 +284,7 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 activity = null
             }
         } catch (ex: Exception) {
-            Log.e("flutter_nfc_red", "Failed destruct", ex)
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
         }
     }
 
