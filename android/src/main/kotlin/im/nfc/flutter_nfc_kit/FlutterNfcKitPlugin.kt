@@ -99,7 +99,9 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 } catch (ex: IOException) {
                     Log.e(TAG, "Close tag error", ex)
                 }
-                nfcAdapter.disableReaderMode(activity)
+                if (hasActivity()) {
+                    nfcAdapter.disableReaderMode(activity)
+                }
                 result.success("")
             }
 
@@ -270,19 +272,26 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         activity = binding.activity
     }
 
+    private fun hasActivity(): Boolean {
+        Log.i("flutter_nfc_reader", "DETACHING")
+
+        val isDetached = activity == null
+        val isDestroyed = activity?.isDestroyed ?: true
+
+        return !isDetached && !isDestroyed
+    }
+
     override fun onDetachedFromActivity() {
         try {
-            Log.i("flutter_nfc_reader", "DETACHING")
-            val isDetached = activity == null
-            val isDestroyed = activity?.isDestroyed ?: true
-
-            if (!isDetached && !isDestroyed) {
+            if (hasActivity()) {
                 pollingTimeoutTask?.cancel()
                 pollingTimeoutTask = null
                 tagTechnology = null
                 ndefTechnology = null
                 activity = null
             }
+        } catch (ex: java.lang.IllegalStateException) {
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
         } catch (ex: Exception) {
             Log.e("flutter_nfc_kit", "Failed destruct", ex)
         }
@@ -295,7 +304,9 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun pollTag(nfcAdapter: NfcAdapter, result: Result, timeout: Int, technologies: Int) {
 
         pollingTimeoutTask = Timer().schedule(timeout.toLong()) {
-            nfcAdapter.disableReaderMode(activity)
+            if (hasActivity()) {
+                nfcAdapter.disableReaderMode(activity)
+            }
             result.error("408", "Polling tag timeout", null)
         }
 
