@@ -290,7 +290,9 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 ndefTechnology = null
                 activity = null
             }
-        } catch (ex: java.lang.IllegalStateException) {
+        } catch (ex: IllegalStateException) {
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
+        } catch (ex: IllegalAccessException) {
             Log.e("flutter_nfc_kit", "Failed destruct", ex)
         } catch (ex: Exception) {
             Log.e("flutter_nfc_kit", "Failed destruct", ex)
@@ -302,113 +304,115 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onDetachedFromActivityForConfigChanges() {}
 
     private fun pollTag(nfcAdapter: NfcAdapter, result: Result, timeout: Int, technologies: Int) {
+        if (!hasActivity()) return;
+        try {
 
-        pollingTimeoutTask = Timer().schedule(timeout.toLong()) {
-            if (hasActivity()) {
-                nfcAdapter.disableReaderMode(activity)
+            pollingTimeoutTask = Timer().schedule(timeout.toLong()) {
+                if (hasActivity()) {
+                    nfcAdapter.disableReaderMode(activity)
+                }
+                result.error("408", "Polling tag timeout", null)
             }
-            result.error("408", "Polling tag timeout", null)
-        }
 
-        nfcAdapter.enableReaderMode(activity, { tag ->
-            pollingTimeoutTask?.cancel()
+            nfcAdapter.enableReaderMode(activity, { tag ->
+                pollingTimeoutTask?.cancel()
 
-            // common fields
-            val type: String
-            val id = tag.id.toHexString()
-            val standard: String
-            // ISO 14443 Type A
-            var atqa = ""
-            var sak = ""
-            // ISO 14443 Type B
-            var protocolInfo = ""
-            var applicationData = ""
-            // ISO 7816
-            var historicalBytes = ""
-            var hiLayerResponse = ""
-            // NFC-F / Felica
-            var manufacturer = ""
-            var systemCode = ""
-            // NFC-V
-            var dsfId = ""
-            // NDEF
-            var ndefAvailable = false
-            var ndefWritable = false
-            var ndefCanMakeReadOnly = false
-            var ndefCapacity = 0
-            var ndefType = ""
+                // common fields
+                val type: String
+                val id = tag.id.toHexString()
+                val standard: String
+                // ISO 14443 Type A
+                var atqa = ""
+                var sak = ""
+                // ISO 14443 Type B
+                var protocolInfo = ""
+                var applicationData = ""
+                // ISO 7816
+                var historicalBytes = ""
+                var hiLayerResponse = ""
+                // NFC-F / Felica
+                var manufacturer = ""
+                var systemCode = ""
+                // NFC-V
+                var dsfId = ""
+                // NDEF
+                var ndefAvailable = false
+                var ndefWritable = false
+                var ndefCanMakeReadOnly = false
+                var ndefCapacity = 0
+                var ndefType = ""
 
-            if (tag.techList.contains(NfcA::class.java.name)) {
-                val aTag = NfcA.get(tag)
-                atqa = aTag.atqa.toHexString()
-                sak = byteArrayOf(aTag.sak.toByte()).toHexString()
-                tagTechnology = aTag
-                when {
-                    tag.techList.contains(IsoDep::class.java.name) -> {
-                        standard = "ISO 14443-4 (Type A)"
+                if (tag.techList.contains(NfcA::class.java.name)) {
+                    val aTag = NfcA.get(tag)
+                    atqa = aTag.atqa.toHexString()
+                    sak = byteArrayOf(aTag.sak.toByte()).toHexString()
+                    tagTechnology = aTag
+                    when {
+                        tag.techList.contains(IsoDep::class.java.name) -> {
+                            standard = "ISO 14443-4 (Type A)"
+                            type = "iso7816"
+                            val isoDep = IsoDep.get(tag)
+                            tagTechnology = isoDep
+                            historicalBytes = isoDep.historicalBytes.toHexString()
+                        }
+                        tag.techList.contains(MifareClassic::class.java.name) -> {
+                            standard = "ISO 14443-3 (Type A)"
+                            type = "mifare_classic"
+                        }
+                        tag.techList.contains(MifareUltralight::class.java.name) -> {
+                            standard = "ISO 14443-3 (Type A)"
+                            type = "mifare_ultralight"
+                        }
+                        else -> {
+                            standard = "ISO 14443-3 (Type A)"
+                            type = "unknown"
+                        }
+                    }
+                } else if (tag.techList.contains(NfcB::class.java.name)) {
+                    val bTag = NfcB.get(tag)
+                    protocolInfo = bTag.protocolInfo.toHexString()
+                    applicationData = bTag.applicationData.toHexString()
+                    if (tag.techList.contains(IsoDep::class.java.name)) {
                         type = "iso7816"
+                        standard = "ISO 14443-4 (Type B)"
                         val isoDep = IsoDep.get(tag)
                         tagTechnology = isoDep
-                        historicalBytes = isoDep.historicalBytes.toHexString()
-                    }
-                    tag.techList.contains(MifareClassic::class.java.name) -> {
-                        standard = "ISO 14443-3 (Type A)"
-                        type = "mifare_classic"
-                    }
-                    tag.techList.contains(MifareUltralight::class.java.name) -> {
-                        standard = "ISO 14443-3 (Type A)"
-                        type = "mifare_ultralight"
-                    }
-                    else -> {
-                        standard = "ISO 14443-3 (Type A)"
+                        hiLayerResponse = isoDep.hiLayerResponse.toHexString()
+                    } else {
                         type = "unknown"
+                        standard = "ISO 14443-3 (Type B)"
+                        tagTechnology = bTag
                     }
-                }
-            } else if (tag.techList.contains(NfcB::class.java.name)) {
-                val bTag = NfcB.get(tag)
-                protocolInfo = bTag.protocolInfo.toHexString()
-                applicationData = bTag.applicationData.toHexString()
-                if (tag.techList.contains(IsoDep::class.java.name)) {
-                    type = "iso7816"
-                    standard = "ISO 14443-4 (Type B)"
-                    val isoDep = IsoDep.get(tag)
-                    tagTechnology = isoDep
-                    hiLayerResponse = isoDep.hiLayerResponse.toHexString()
+                } else if (tag.techList.contains(NfcF::class.java.name)) {
+                    standard = "ISO 18092 (FeliCa)"
+                    type = "iso18092"
+                    val fTag = NfcF.get(tag)
+                    manufacturer = fTag.manufacturer.toHexString()
+                    systemCode = fTag.systemCode.toHexString()
+                    tagTechnology = fTag
+                } else if (tag.techList.contains(NfcV::class.java.name)) {
+                    standard = "ISO 15693"
+                    type = "iso15693"
+                    val vTag = NfcV.get(tag)
+                    dsfId = vTag.dsfId.toHexString()
+                    tagTechnology = vTag
                 } else {
                     type = "unknown"
-                    standard = "ISO 14443-3 (Type B)"
-                    tagTechnology = bTag
+                    standard = "unknown"
                 }
-            } else if (tag.techList.contains(NfcF::class.java.name)) {
-                standard = "ISO 18092 (FeliCa)"
-                type = "iso18092"
-                val fTag = NfcF.get(tag)
-                manufacturer = fTag.manufacturer.toHexString()
-                systemCode = fTag.systemCode.toHexString()
-                tagTechnology = fTag
-            } else if (tag.techList.contains(NfcV::class.java.name)) {
-                standard = "ISO 15693"
-                type = "iso15693"
-                val vTag = NfcV.get(tag)
-                dsfId = vTag.dsfId.toHexString()
-                tagTechnology = vTag
-            } else {
-                type = "unknown"
-                standard = "unknown"
-            }
 
-            // detect ndef
-            if (tag.techList.contains(Ndef::class.java.name)) {
-                val ndefTag = Ndef.get(tag)
-                ndefTechnology = ndefTag
-                ndefAvailable = true
-                ndefType = ndefTag.type
-                ndefWritable = ndefTag.isWritable
-                ndefCanMakeReadOnly = ndefTag.canMakeReadOnly()
-                ndefCapacity = ndefTag.maxSize
-            }
+                // detect ndef
+                if (tag.techList.contains(Ndef::class.java.name)) {
+                    val ndefTag = Ndef.get(tag)
+                    ndefTechnology = ndefTag
+                    ndefAvailable = true
+                    ndefType = ndefTag.type
+                    ndefWritable = ndefTag.isWritable
+                    ndefCanMakeReadOnly = ndefTag.canMakeReadOnly()
+                    ndefCapacity = ndefTag.maxSize
+                }
 
-            result.success(JSONObject(mapOf(
+                result.success(JSONObject(mapOf(
                     "type" to type,
                     "id" to id,
                     "standard" to standard,
@@ -426,9 +430,16 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                     "ndefWritable" to ndefWritable,
                     "ndefCanMakeReadOnly" to ndefCanMakeReadOnly,
                     "ndefCapacity" to ndefCapacity
-            )).toString())
+                )).toString())
 
-        }, technologies, null)
+            }, technologies, null)
+        } catch (ex: IllegalStateException) {
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
+        } catch (ex: IllegalAccessException) {
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
+        } catch (ex: Exception) {
+            Log.e("flutter_nfc_kit", "Failed destruct", ex)
+        }
     }
 
     private class MethodResultWrapper internal constructor(result: Result) : Result {
@@ -471,6 +482,14 @@ class FlutterNfcKitPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             try {
                 if (!hasError) fn()
             } catch (e: IllegalStateException) {
+                hasError = true;
+                Log.w(TAG, "Exception occurred when using MethodChannel.Result: $e")
+                Log.w(TAG, "Will ignore all following usage of object: $methodResult")
+            } catch (e: IllegalAccessException) {
+                hasError = true;
+                Log.w(TAG, "Exception occurred when using MethodChannel.Result: $e")
+                Log.w(TAG, "Will ignore all following usage of object: $methodResult")
+            } catch (e: Exception) {
                 hasError = true;
                 Log.w(TAG, "Exception occurred when using MethodChannel.Result: $e")
                 Log.w(TAG, "Will ignore all following usage of object: $methodResult")
